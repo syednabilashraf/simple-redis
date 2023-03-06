@@ -40,6 +40,8 @@ def parse_resp_value(data: TextIOBase) -> RESPValue:
         case "*":
             length = int(data.readline())
             return RESPArray([parse_resp_value(data) for _ in range(length)])
+        case "":
+            raise EOFError()
         case c:
             raise Exception("Unsupported request:", c+data.readline())
 

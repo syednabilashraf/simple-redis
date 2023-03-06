@@ -1,6 +1,7 @@
 from io import StringIO
 import io
 import socket
+import socketserver
 
 from app.resp import BulkString, ErrorString, RESPArray, RESPValue, SimpleString, parse_resp_value, serialize_resp_value
 
@@ -32,7 +33,7 @@ def execute_request(query: io.TextIOBase) -> bytes:
     return all_results
 
 
-def main():
+def start_low_level_server():
     server_socket = socket.create_server(("localhost", 6379), reuse_port=True)
     [client_connection, _client_address] = server_socket.accept()  # wait for client
 
@@ -48,6 +49,33 @@ def main():
             result = execute_request(query_stream)
             client_connection.send(result)
             query = query_stream.read()
+
+
+class RedisConnectionHandler(socketserver.StreamRequestHandler):
+    def handle(self) -> None:
+        print("Received connection", self.client_address)
+        input = io.TextIOWrapper(self.rfile, newline="\r\n")
+        while True:
+            try:
+                result = execute_request(input)
+            except EOFError:
+                break
+            self.wfile.write(result)
+        print("Closed connection", self.client_address)
+
+
+def start_threaded_server():
+    socketserver.ThreadingTCPServer.allow_reuse_address = True
+    with socketserver.ThreadingTCPServer(("localhost", 6379), RedisConnectionHandler) as server:
+        try:
+            server.serve_forever()
+        finally:
+            server.shutdown()
+            server.server_close()
+
+
+def main():
+    start_threaded_server()
 
 
 if __name__ == "__main__":
