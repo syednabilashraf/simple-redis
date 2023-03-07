@@ -12,10 +12,13 @@ def print_prefix_lines(text: str, prefix: str):
 
 def execute_command(query: list[str]) -> RESPValue:
     command = query[0].upper()
-    if command == "PING":
-        return SimpleString("PONG")
-    else:
-        return ErrorString(f"ERR Unsupported command: {command}")
+    match (command, query[1:]):
+        case ("PING", []):
+            return SimpleString("PONG")
+        case ("PING" | "ECHO", [arg]):
+            return BulkString(arg)
+        case _:
+            return ErrorString(f"ERR Unsupported command: {command}")
 
 
 def execute_request(query: io.TextIOBase) -> bytes:
@@ -25,7 +28,7 @@ def execute_request(query: io.TextIOBase) -> bytes:
         raise Exception("Expected array containing bulk strings")
     request = [str(elem) for elem in request]
     result = execute_command(request)
-    print("command", request, "result", result)
+    print(f"command '{' '.join(request) }' result", repr(result))
     return serialize_resp_value(result).encode()
 
 
