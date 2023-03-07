@@ -10,7 +10,8 @@ def print_prefix_lines(text: str, prefix: str):
     print(*(prefix + line for line in text.splitlines()), sep="\n")
 
 
-def execute_command(command: str) -> RESPValue:
+def execute_command(query: list[str]) -> RESPValue:
+    command = query[0].upper()
     if command == "PING":
         return SimpleString("PONG")
     else:
@@ -20,17 +21,12 @@ def execute_command(command: str) -> RESPValue:
 def execute_request(query: io.TextIOBase) -> bytes:
     request = parse_resp_value(query)
     print("request", request)
-    if not isinstance(request, RESPArray):
-        raise Exception("Expected array containing user requests")
-    all_results = bytes()
-    for command in request:
-        if not isinstance(command, BulkString):
-            raise Exception("Expected string command")
-        command = command.upper()
-        result = execute_command(command)
-        print("command", command, "result", result)
-        all_results = all_results + serialize_resp_value(result).encode()
-    return all_results
+    if not isinstance(request, RESPArray) or not all(isinstance(elem, BulkString) for elem in request):
+        raise Exception("Expected array containing bulk strings")
+    request = [str(elem) for elem in request]
+    result = execute_command(request)
+    print("command", request, "result", result)
+    return serialize_resp_value(result).encode()
 
 
 def start_low_level_server():
