@@ -2,8 +2,13 @@ from io import StringIO
 import io
 import socket
 import socketserver
+from time import time
 
-from app.resp import BulkString, ErrorString, RESPArray, RESPValue, SimpleString, parse_resp_value, serialize_resp_value
+from app.key_value_store import KeyValueStore
+from app.resp import BulkString, ErrorString, NilBulkString, RESPArray, RESPValue, SimpleString, parse_resp_value, serialize_resp_value
+
+
+key_store = KeyValueStore()
 
 
 def print_prefix_lines(text: str, prefix: str):
@@ -17,6 +22,29 @@ def execute_command(query: list[str]) -> RESPValue:
             return SimpleString("PONG")
         case ("PING" | "ECHO", [arg]):
             return BulkString(arg)
+        case ("SET", [key, value, *options]):
+            option_name = options[0].upper() if options else None
+            match (option_name, options[1:]):
+                case (None, _):
+                    expires_at = None
+                case ("EX", [seconds]):
+                    expires_at = int(time() * 1000) + int(seconds) * 1000
+                case ("PX", [milliseconds]):
+                    expires_at = int(time() * 1000) + int(milliseconds)
+                case ("EXAT", [timestamp]):
+                    expires_at = int(timestamp) * 1000
+                case ("PXAT", [timestamp]):
+                    expires_at = int(timestamp)
+                case _:
+                    return ErrorString(f"ERR Unsupported option: {option_name}")
+            key_store.set(key, value, expires_at=expires_at)
+            return SimpleString("OK")
+        case ("GET", [key]):
+            value = key_store.get(key)
+            if value is None:
+                return NilBulkString()
+            else:
+                return BulkString(value)
         case _:
             return ErrorString(f"ERR Unsupported command: {command}")
 
