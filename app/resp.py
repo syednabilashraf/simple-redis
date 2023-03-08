@@ -20,8 +20,20 @@ class RESPArray(list["RESPValue"]):
     def __repr__(self) -> str:
         return "RESPArray(" + super().__repr__() + ")"
 
+# TODO: handle null bulk string and array
 
-RESPValue = SimpleString | BulkString | ErrorString | RESPArray
+
+class NilBulkString():
+    def __repr__(self) -> str:
+        return "Bulk(nil)"
+
+
+class NilArray():
+    def __repr__(self) -> str:
+        return "RESPArray(nil)"
+
+
+RESPValue = SimpleString | BulkString | ErrorString | RESPArray | NilBulkString | NilArray
 
 
 def parse_resp_value(data: TextIOBase) -> RESPValue:
@@ -34,11 +46,15 @@ def parse_resp_value(data: TextIOBase) -> RESPValue:
             return ErrorString(data.readline())
         case "$":
             length = int(data.readline())
+            if length == -1:
+                return NilBulkString()
             text = data.read(length)
             assert data.read(2) == "\r\n"
             return BulkString(text)
         case "*":
             length = int(data.readline())
+            if length == -1:
+                return NilArray()
             return RESPArray([parse_resp_value(data) for _ in range(length)])
         case "":
             raise EOFError()
@@ -56,3 +72,7 @@ def serialize_resp_value(value: RESPValue) -> str:
             return f"${len(s)}\r\n{s}\r\n"
         case RESPArray(a):
             return f"*{len(a)}\r\n" + "".join(map(serialize_resp_value, a))
+        case NilBulkString():
+            return "$-1\r\n"
+        case NilArray():
+            return "*-1\r\n"
